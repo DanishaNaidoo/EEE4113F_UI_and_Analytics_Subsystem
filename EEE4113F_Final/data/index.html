@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<!--
+EEE4113F Design Project - Hornbill Detect Web Page
+By Danisha Naidoo (NDXDAN019)
+1st April 2024
+
+Description: 
+This code sets up a web page which displays a graph of temperature vs Time, the maximum, minimum and average temperature.
+This data can also be downloaded as a csv file. 
+This web page is hosted by the ESP-WROOM_32 server.
+-->
+
+<head>
+    <title>Temperature and Time Display</title>
+    <!-- CSS Styling -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            text-align: center;
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            background-color: #e8e5e5;
+        }
+
+        .box {
+            /* Defines the background area*/
+            background-color: #e8e5e5; 
+            color: #0c0b0b; 
+            padding: 12px;
+            border-radius: 10px;
+        
+            text-align: left;
+        }
+        
+        .box1, .box2, .box3 {
+            /* Defines boxes for analytic data*/
+            background-color: #ffffff; 
+            color: #0c0b0b; 
+            padding: 8px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+        }
+        .data label {
+            font-weight: bold;
+        }
+        .graphContainer {
+            /* Defines and area for the graph*/
+            width: 90vw; 
+            height: 50vh; 
+            margin: auto; 
+            background-color: #ffffff; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+        }
+        canvas { 
+            width: 100%;
+            height: 250px;
+            display: block; /*get rid of rest for white block removal*/
+            margin: auto; /* Center the container horizontally */
+            background-color: #ffffff; /* Set background color */
+            border-radius: 10px; /* Add border radius for rounded corners */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Add shadow effect */
+        }
+        #downloadCSV {
+            /* Defines csv button styling*/
+            background-color: #256288; 
+            border: none; 
+            color: white; 
+            padding: 10px 20px; 
+            text-align: center; 
+            text-decoration: none; 
+            display: inline-block;
+            font-size: 16px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
+
+        /* Hover effect */
+            #downloadCSV:hover {
+                background-color: #102b66; /* Darken background color on hover */
+        }
+    </style>
+
+   <script>
+        // Function to fetch temperature and time data from the server
+        var temperaturesArray = [];
+        var dateObjects = [];
+        function fetchData() {
+            fetch('/temperature')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+        })
+            .then(data => {
+                if (!data) {
+                    throw new Error('Empty response received');
+                }
+                // Split the data into array
+                temperaturesArray = data.trim().split('\n').map(parseFloat);
+                console.log('Temperatures Array:', temperaturesArray);
+            })
+            .catch(error => {
+                //Error handling 
+                document.getElementById('TempError').innerText = 'Error fetching data ';
+                console.error('Error fetching temperature:', error);
+            });
+
+            fetch('/time')
+            .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.text();
+        })
+            .then(data => {
+                if (!data) {
+                    throw new Error('Empty response received');
+                }
+                // Split the data into array
+                const timeArray = data.trim().split('\n');
+                // convert into dateTime
+                dateObjects = timeArray.map(dateTimeString => new Date(dateTimeString));
+                console.log('Date Objects Array:', dateObjects);
+
+                plotGraph(temperaturesArray, dateObjects);
+                updateAnalytics(temperaturesArray);
+            })
+            .catch(error => {
+                // Error handling 
+                document.getElementById('timeError').innerText = 'Error fetching data ';
+                console.error('Error fetching time:', error);
+            });
+        }
+
+        fetchData();
+        // Fetch temperature and time periodically
+         setInterval(() => {
+            fetchData();
+        }, 120000); 
+
+        // Function to plot the temperature vs time graph
+        function plotGraph(temperatures, times) {
+            try {
+                var canvas = document.getElementById("myCanvas");
+                var ctx = canvas.getContext("2d");
+
+                // Set up graph parameters
+                var graphWidth = canvas.width - 100; 
+                var graphHeight = canvas.height - 100; 
+
+                // Max and min on y-axis
+                var maxYValue = Math.max(...temperatures);
+                var minYValue = Math.min(...temperatures);
+                var yScale = graphHeight / (maxYValue - minYValue);
+
+                // Max and min on x-axis
+                var maxXValue = new Date(times[times.length - 1]).getTime(); // Convert ISO time to milliseconds
+                var minXValue = new Date(times[0]).getTime(); // Convert ISO time to milliseconds
+                var xScale = graphWidth / (maxXValue - minXValue);
+
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw grid lines
+                ctx.strokeStyle = "#ddd";
+                ctx.lineWidth = 0.5;
+                for (var i = 1; i <= 5; i++) {
+                    var y = 50 + (i * graphHeight / 5);
+                    ctx.beginPath();
+                    ctx.moveTo(50, y);
+                    ctx.lineTo(canvas.width - 50, y);
+                    ctx.stroke();
+                }
+
+                // Draw x-axis
+                ctx.beginPath();
+                ctx.moveTo(50, canvas.height - 50);
+                ctx.lineTo(canvas.width - 50, canvas.height - 50);
+                ctx.stroke();
+
+                // Draw y-axis
+                ctx.beginPath();
+                ctx.moveTo(50, canvas.height - 50);
+                ctx.lineTo(50, 50);
+                ctx.stroke();
+
+                // Plot temperature points
+                ctx.beginPath();
+                ctx.strokeStyle = "darkblue";
+                ctx.fillStyle = "darkblue";
+                ctx.lineWidth = 2;
+                for (var i = 0; i < temperatures.length; i++) {
+                    var x = 50 + ((new Date(times[i]).getTime() - minXValue) * xScale);
+                    var y = canvas.height - 50 - ((temperatures[i] - minYValue) * yScale);
+                    ctx.lineTo(x, y);
+                    ctx.arc(x, y, 1, 0, 2 * Math.PI);
+                    ctx.fillText(temperatures[i], x - 10, y - 10);
+                }
+                ctx.stroke();
+
+                // Draw x-axis labels
+                ctx.fillStyle = "#000";
+                ctx.textAlign = "center";
+                for (var i = 0; i < times.length; i++) {
+                    var timestamp = new Date(times[i]);
+                    var formattedTimeLabel = timestamp.getHours() + ':' + (timestamp.getMinutes() < 10 ? '0' : '') + timestamp.getMinutes();
+                    var formattedDateLabel = timestamp.getDate() + ' ' + timestamp.toLocaleString('default', { month: 'short' });
+
+                    var x = 50 + ((timestamp.getTime() - minXValue) * xScale);
+                    var yTime = canvas.height - 30;
+                    var yDate = yTime + 12;
+
+                    ctx.fillText(formattedTimeLabel, x, yTime);
+                    ctx.fillText(formattedDateLabel, x, yDate);
+                }
+
+                // Draw y-axis label
+                ctx.save();
+                ctx.translate(20, canvas.height / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.textAlign = "center";
+                ctx.fillText("Temperature (°C)", 0, 0);
+                ctx.restore();
+
+                // Draw x-axis label
+                ctx.textAlign = "center";
+                ctx.fillText("Time", canvas.width / 2, canvas.height - 4);
+
+            } catch (error) {
+                // Error handling
+                console.error('Error initializing chart:', error);
+                document.getElementById('myCanvas').innerText = 'Error initializing chart';
+            }
+        }
+
+        // Function to get the current date and time
+        function updateDateTime() {
+            var currentDate = new Date();
+            
+            // Format the date and time
+            var options = {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false // Use 24-hour format
+            };
+            
+            // Format the date and time
+            var dateTimeString = currentDate.toLocaleString('en-US', options); 
+            
+            // Update the cweb page
+            document.getElementById("datetime").innerText = dateTimeString;
+        }
+        // Update the date and time every second
+        setInterval(updateDateTime, 1000);
+
+        // Calculate the analytics
+        // Function to calculate average temperature
+        function calculateAverageTemperature(temperaturesArray) {
+            var sum = temperaturesArray.reduce((total, current) => total + current, 0);
+            return sum / temperaturesArray.length;
+        }
+
+        // Function to calculate maximum temperature
+        function calculateMaxTemperature(temperaturesArray) {
+            return Math.max(...temperaturesArray);
+        }
+
+        // Function to calculate minimum temperature
+        function calculateMinTemperature(temperaturesArray) {
+            return Math.min(...temperaturesArray);
+        }
+
+        // Function to update analytics section with latest data
+        function updateAnalytics(temperaturesArray) {
+            // Update average temperature
+            var averageTemperature = calculateAverageTemperature(temperaturesArray);
+            var averageTemperatureElement = document.getElementById('averageTemperature');
+            averageTemperatureElement.textContent = 'Average Temperature: ' + averageTemperature.toFixed(2) + '°C';
+
+            // Update max temperature
+            var maxTemperature = calculateMaxTemperature(temperaturesArray);
+            var maxTemperatureElement = document.getElementById('maxTemperature');
+            maxTemperatureElement.textContent = 'Max Temperature: ' + maxTemperature.toFixed(2) + '°C';
+
+            // Update min temperature
+            var minTemperature = calculateMinTemperature(temperaturesArray);
+            var minTemperatureElement = document.getElementById('minTemperature');
+            minTemperatureElement.textContent = 'Min Temperature: ' + minTemperature.toFixed(2) + '°C';
+        }
+
+
+        // Function to convert data to CSV format
+        function convertDataToCSV(times, temperatures) {
+            var csv = 'Date, Time, Temperature\n';
+            for (var i = 0; i < times.length; i++) {
+                var timeString = times[i].toLocaleString(); // Convert Date to string
+                csv += timeString + ', ' + temperatures[i] + '\n';
+            }
+            return csv;
+        }
+
+        // Function to download CSV file
+        function downloadCSV() {
+            // Convert data to CSV format
+            var csv = convertDataToCSV(dateObjects, temperaturesArray); 
+            var blob = new Blob([csv], { type: 'text/csv' });
+            var filename = 'temperature_data.csv';
+
+            // Trigger download process
+            if (window.navigator.msSaveOrOpenBlob) {
+                // For IE/Edge browsers
+                window.navigator.msSaveBlob(blob, filename);
+            } else {
+                // For other browsers
+                var a = document.createElement('a');
+                var url = URL.createObjectURL(blob);
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+        }
+        // Button for csv download 
+        document.addEventListener('DOMContentLoaded', function() {
+            var downloadButton = document.getElementById('downloadCSV');
+            downloadButton.addEventListener('click', downloadCSV);
+        });
+
+
+    </script>
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hornbill Detect</title>
+    </head>
+    <body>
+        <h1 class="heading">Hornbill Detect</h1>
+        <br>
+        <div id="datetime"></div> <!-- Date and Time -->
+        <br>
+        <div class="box">
+        <h3 class="tempDataHeading">Nest Temperature Trend Over Time</h3>
+        <h4 id="tempError"></h4>
+        <h4 id="timeError"></h4>
+        <br>
+        <div id="graphContainer">
+        <canvas id="myCanvas"></canvas> <!-- Graph -->
+        </div>
+        <br>
+        <h3 class="analyticsHeading">Temperature Analysis</h3>
+        <br>
+        <div class="box1">
+        <div id="averageTemperature"></div> <!-- Average temperature -->
+        </div>
+        <br>
+        <div class="box2">
+        <div id="maxTemperature"></div> <!-- Max temperature -->
+        </div>
+        <br>
+        <div class="box3">
+        <div id="minTemperature"></div> <!-- Min temperature -->
+        </div>
+        <br>
+        <button id="downloadCSV">Download CSV</button> <!-- Download CSV -->
+    </div>
+</body>
+</html>
+
+
+
