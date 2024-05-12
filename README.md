@@ -17,12 +17,12 @@ The contents of this repo include:
 
 # File Structure
 The following file structure should be kept for the project as it allows the ESP32 to access the index.html and data.txt using the SPIFFS filesystem uploader:
-README
-EEE4113F_Final/
--> EEE4113F_Final.ino
--> data/
-  -> index.html
-  -> data.txt
+README\n
+EEE4113F_Final/\n
+\n-> EEE4113F_Final.ino
+\n-> data/
+\n  -> index.html
+\n  -> data.txt
 
 # Example usage
 1. Upload the sketch to the ESP32 using the Arduino IDE
